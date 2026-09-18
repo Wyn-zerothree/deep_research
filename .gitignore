@@ -1,0 +1,55 @@
+# ---------- 密钥 / 本地配置（务必保持 .env.example 被跟踪）----------
+.env
+.env.local
+.env.*.local
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------- Node / 前端 ----------
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.local
+*.timestamp-*-*.mjs
+.eslintcache
+*.tsbuildinfo
+
+# ---------- IDE / 操作系统 ----------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.suo
+*.sw?
+
+# ---------- 本地工具配置 ----------
+.claude/settings.local.json
+
+# ---------- 运行产物 / 本地草稿 ----------
+output/
+logs/
+*.log
+extracted_images/
+*.freenotes
+freenotes_*.txt
+
+# ---------- 文档二进制（保留 Markdown 源文件即可）----------
+*.pdf
+
+# ---------- 本地数据库（运行时生成，且可能含真实数据）----------
+*.db
+*.sqlite
+*.sqlite3
+
