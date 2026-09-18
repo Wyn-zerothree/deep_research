@@ -124,7 +124,7 @@ app/
 │   ├── graph.py          # StateGraph 构建：节点、条件边、反思循环
 │   ├── nodes.py          # 9 个节点函数
 │   ├── state.py          # ResearchState（40+ 字段）
-│   ├── prompts.py        # 17 个系统提示词，其中 8 个接线到实际 Agent
+│   ├── prompts.py        # 8 个系统提示词，与 8 个 Agent 一一对应
 │   ├── tools.py          # Bocha 检索、Milvus RAG 封装
 │   ├── config.py         # AppConfig 不可变 dataclass
 │   ├── memory/           # 双层记忆 + 多后端降级链
@@ -143,8 +143,6 @@ front/agent_front/        # Vue 3 前端（SSE 流式渲染）
 ## 五、已知限制
 
 - **无自动化测试**。项目定位是架构演示，代码质量重点在模式而非生产级健壮性。
-- **多数工具是桩函数**。`tools.py` 中除 Bocha 联网检索与 Milvus RAG 外的工具（文件系统、SQL、地图等）为占位实现。
 - **完整记忆功能依赖外部服务**。Postgres / Redis / Milvus 未接入时会逐级降级到 SQLite，功能可用但非预期路径。
 - **反思循环的收敛收益未经量化**。当前只能观察到"通常 1–2 轮即满足证据充分条件"，缺少对照实验数据。
-- **`prompts.py` 有 9 个提示词未接线**。17 个 key 中只有 8 个被 `build_agent()` 实际加载；`reflect`、`codegen`、`sql_agent` 等属于遗留内容。其中 `reflect` 值得注意——reflect 节点在 `graph.py` 里复用了 `agents.planner`，因此它执行时用的是 planner 的 system prompt，而非那份专门为补搜计划写的 reflect prompt。
 - **SQLite 降级后端无并发保护**，仅适用于本地单进程使用。
