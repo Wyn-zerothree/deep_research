@@ -164,6 +164,7 @@ const usePrompt = async (prompt: string) => {
   errorMessage.value = ''
   await nextTick()
   composerRef.value?.focus()
+  await runResearch()
 }
 
 const applyStarterByIndex = (index: number) => {
@@ -185,7 +186,11 @@ const pushProgress = (message: string) => {
 
 const runResearch = async () => {
   const userText = query.value.trim()
-  if (!userText || loading.value) return
+  if (!userText) {
+    errorMessage.value = '请先输入问题，或点选上方的推荐提问。'
+    return
+  }
+  if (loading.value) return
   loading.value = true
   errorMessage.value = ''
   progressLogs.value = []
