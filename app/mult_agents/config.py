@@ -38,6 +38,7 @@ class AppConfig:
     milvus_host: str
     milvus_port: int
     milvus_collection: str
+    milvus_rag_collection: str
 
     def with_overrides(self, **kwargs) -> "AppConfig":
         cleaned = {k: v for k, v in kwargs.items() if v is not None}
@@ -105,6 +106,9 @@ class AppConfig:
         milvus_host = AppConfig._resolve_str(data, "milvus_host", "MILVUS_HOST", "127.0.0.1")
         milvus_port = AppConfig._resolve_int(data, "milvus_port", "MILVUS_PORT", 19530)
         milvus_collection = AppConfig._resolve_str(data, "milvus_collection", "MILVUS_COLLECTION", "mult_agent_memory")
+        milvus_rag_collection = AppConfig._resolve_str(
+            data, "milvus_rag_collection", "MILVUS_RAG_COLLECTION", "mult_agent_knowledge"
+        )
         return AppConfig(
             api_key=api_key,
             model=model,
@@ -128,6 +132,7 @@ class AppConfig:
             milvus_host=milvus_host,
             milvus_port=milvus_port,
             milvus_collection=milvus_collection,
+            milvus_rag_collection=milvus_rag_collection,
         )
 
     @staticmethod
@@ -161,6 +166,9 @@ class AppConfig:
         milvus_host = AppConfig._resolve_str(data, "milvus_host", "MILVUS_HOST", "127.0.0.1")
         milvus_port = AppConfig._resolve_int(data, "milvus_port", "MILVUS_PORT", 19530)
         milvus_collection = AppConfig._resolve_str(data, "milvus_collection", "MILVUS_COLLECTION", "mult_agent_memory")
+        milvus_rag_collection = AppConfig._resolve_str(
+            data, "milvus_rag_collection", "MILVUS_RAG_COLLECTION", "mult_agent_knowledge"
+        )
         return AppConfig(
             api_key=api_key,
             model=model,
@@ -184,4 +192,5 @@ class AppConfig:
             milvus_host=milvus_host,
             milvus_port=milvus_port,
             milvus_collection=milvus_collection,
+            milvus_rag_collection=milvus_rag_collection,
         )

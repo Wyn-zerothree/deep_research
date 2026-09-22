@@ -54,14 +54,14 @@ def main() -> None:
         config=RAGConfig(
             milvus_host=config.milvus_host,
             milvus_port=config.milvus_port,
-            collection_name=config.milvus_collection,
+            collection_name=config.milvus_rag_collection,
         ),
     )
 
     total_chunks = rag.ingest_paths(paths)
     print(
         f"入库完成 | 文件数={len(paths)} | chunk数={total_chunks} | "
-        f"collection={config.milvus_collection}"
+        f"collection={config.milvus_rag_collection}"
     )
 
 

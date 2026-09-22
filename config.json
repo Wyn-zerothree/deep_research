@@ -20,5 +20,6 @@
   "postgres_dsn": "",
   "milvus_host": "",
   "milvus_port": 19530,
-  "milvus_collection": "mult_agent_memory"
+  "milvus_collection": "mult_agent_memory",
+  "milvus_rag_collection": "mult_agent_knowledge"
 }

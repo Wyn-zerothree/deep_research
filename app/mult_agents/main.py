@@ -200,7 +200,7 @@ def build_agents(model: str, api_key: str, config: AppConfig) -> AgentBundle:
     rag_config = RAGConfig(
         milvus_host=config.milvus_host,
         milvus_port=config.milvus_port,
-        collection_name=config.milvus_collection,
+        collection_name=config.milvus_rag_collection,
     )
     init_rag_system(api_key=api_key, config=rag_config)
     # 去掉每个 Agent 强制绑定的 tools，只做信息抽取，降低 System Prompt 长度
