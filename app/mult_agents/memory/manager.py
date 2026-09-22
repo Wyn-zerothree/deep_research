@@ -273,8 +273,13 @@ class MemoryManager:
             f"{history_text}\n"
             "输出要求：100-300字，中文，结构紧凑。"
         )
-        response = self._summary_llm.invoke([HumanMessage(content=prompt)])
-        return str(response.content).strip()
+        try:
+            response = self._summary_llm.invoke([HumanMessage(content=prompt)])
+            return str(response.content).strip()
+        except Exception as exc:
+            logger.warning("摘要模型调用失败，降级规则压缩: %s: %s", type(exc).__name__, exc)
+            combined = f"{existing_summary}\n{history_text}".strip()
+            return combined[-4000:]
 
     def _compress_redis_thread(self, tenant_id: str, user_id: str, thread_id: str) -> None:
         if self._redis_client is None:

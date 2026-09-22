@@ -162,11 +162,37 @@ def _load_json(text: str, fallback: dict) -> dict:
     return fallback
 
 
+def _safe_invoke(agent, human: HumanMessage, node: str):
+    """调用 LLM；失败返回 None 而不是抛穿整条流水线。
+
+    单次 API 抖动（超时/限流/连接重置）不应让前面所有节点的成果作废。
+    降级必须"响亮"：WARNING 日志带上节点名与异常类型，便于评测时统计降级次数。
+    """
+    try:
+        return agent.invoke({"messages": [human]})
+    except Exception as exc:
+        logger.warning(
+            "%s LLM 调用失败，已降级: %s: %s",
+            colorize(f"[{node}]", "red"),
+            type(exc).__name__,
+            str(exc)[:300],
+        )
+        return None
+
+
+def _degraded_content(fallback: dict) -> str:
+    return json.dumps(fallback, ensure_ascii=False) if fallback else ""
+
+
 def _invoke_json_agent(state: ResearchState, prompt: str, agent, agent_name: str, node: str, fallback: dict) -> tuple[dict, str, list]:
     human = HumanMessage(content=with_memory_context(state, prompt))
     # Optimization: Do NOT pass state["messages"] to avoid token accumulation
     # Each node only needs its specific instruction and the current state data
-    result = agent.invoke({"messages": [human]})
+    result = _safe_invoke(agent, human, node)
+    if result is None:
+        content = _degraded_content(fallback)
+        emit(node, content)
+        return fallback, content, [human]
     tools, tool_outputs = collect_tool_calls(result["messages"])
     logger.info("%s 工具: %s", colorize(f"[{node}]", "green"), ", ".join(tools) if tools else "无")
     for item in tool_outputs[:5]:
@@ -966,7 +992,18 @@ def direct_answer_node(state: ResearchState, agent, agent_name: str) -> Research
     logger.info("%s 开始 | agent=%s", colorize("[direct_answer]", "cyan"), colorize(agent_name, "magenta"))
     prompt = f"用户问题：{state['query']}"
     human = HumanMessage(content=with_memory_context(state, prompt))
-    result = agent.invoke({"messages": [human]})
+    result = _safe_invoke(agent, human, "direct_answer")
+    if result is None:
+        content = "抱歉，模型服务本次调用失败，请稍后重试。"
+        emit("direct_answer", content)
+        return {
+            "intent": "direct",
+            "final": content,
+            "draft": content,
+            "analysis_summary": content,
+            "needs_more_research": False,
+            "messages": [human],
+        }
     content = _last_content(result).strip()
     emit("direct_answer", content)
     return {
@@ -1339,6 +1376,26 @@ def reflect_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
         "messages": messages,
     }
 
+def _fallback_report(state: ResearchState) -> str:
+    """写作模型不可用时的降级报告：只做搬运，不生成新结论。"""
+    findings = state.get("findings", [])
+    lines = [
+        "> 写作模型本次调用失败，以下为系统依据已有结论自动汇总的降级报告（未经润色）。",
+        "",
+        f"# {state.get('query', '研究报告')}",
+        "",
+    ]
+    if not findings:
+        lines.append("本轮未产出可用结论。")
+    for item in findings:
+        if isinstance(item, dict):
+            parts = [str(value) for value in item.values() if value]
+            lines.append(f"- {' | '.join(parts)}")
+        else:
+            lines.append(f"- {item}")
+    return "\n".join(lines)
+
+
 def write_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
     logger.info("%s 开始 | agent=%s", colorize("[write]", "cyan"), colorize(agent_name, "magenta"))
     valid_source_ids = [str(item.get("source_id", "")).strip() for item in state.get("source_index", []) if item.get("source_id")]
@@ -1363,8 +1420,8 @@ def write_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
     human = HumanMessage(content=with_memory_context(state, prompt))
 
     # 彻底断开之前的 messages 累积，只给模型当前这一条指令，避免被前面的 JSON 带偏
-    result = agent.invoke({"messages": [human]})
-    content = _last_content(result)
+    result = _safe_invoke(agent, human, "write")
+    content = _last_content(result) if result is not None else _fallback_report(state)
 
     # 强制清理可能的错误 JSON 代码块
     content = re.sub(r"^```json\s*", "", content)
@@ -1377,4 +1434,5 @@ def write_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
 
     final_content = _ensure_reference_section(content, state)
     emit("write", final_content)
-    return {"draft": final_content, "final": final_content, "messages": [human, result["messages"][-1]]}
+    tail = [human] if result is None else [human, result["messages"][-1]]
+    return {"draft": final_content, "final": final_content, "messages": tail}
