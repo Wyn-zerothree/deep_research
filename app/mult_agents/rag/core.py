@@ -28,6 +28,31 @@ class RAGConfig:
     embedding_model: str = "text-embedding-v1"
     chunk_size: int = 500
     chunk_overlap: int = 50
+    # 同一文档的相邻分片语义高度相似，会挤占 k 个槽位、压缩证据多样性；
+    # 默认超采后按文档去重，只保留每个文档最相关的分片。
+    diversify_by_source: bool = True
+    fetch_multiplier: int = 4
+
+
+def _diversify_by_source(docs: list[Document], k: int) -> list[Document]:
+    """先保每个文档的最相关分片，不足 k 条时再用同文档的次相关分片补足。"""
+    picked: list[Document] = []
+    seen: set[str] = set()
+    rest: list[Document] = []
+    for doc in docs:
+        source = str((doc.metadata or {}).get("source") or "")
+        if source in seen:
+            rest.append(doc)
+            continue
+        seen.add(source)
+        picked.append(doc)
+        if len(picked) >= k:
+            return picked
+    for doc in rest:
+        if len(picked) >= k:
+            break
+        picked.append(doc)
+    return picked
 
 
 class RAGSystem:
@@ -80,7 +105,11 @@ class RAGSystem:
     def search_records(self, query: str, k: int = 5) -> list[dict]:
         if not utility.has_collection(self.config.collection_name):
             return []
-        docs = self.vectorstore.similarity_search(query, k=k)
+        if self.config.diversify_by_source:
+            docs = self.vectorstore.similarity_search(query, k=max(k * self.config.fetch_multiplier, k))
+            docs = _diversify_by_source(docs, k)
+        else:
+            docs = self.vectorstore.similarity_search(query, k=k)
         records: list[dict] = []
         for idx, doc in enumerate(docs, 1):
             metadata = doc.metadata or {}
