@@ -191,7 +191,14 @@ class AgentBundle:
 def build_agent(model: str, api_key: str, prompt_key: str, temperature: float, tools: list):
     if api_key:
         os.environ["DASHSCOPE_API_KEY"] = api_key
-    llm = ChatTongyi(model=model, temperature=temperature)
+    llm = ChatTongyi(
+        model=model,
+        temperature=temperature,
+        max_retries=2,
+        # dashscope 默认单次请求超时 300s，配合上层重试最长可阻塞半小时以上；
+        # 显式压到 120s，让卡死的调用快速失败而不是静默挂住整条流水线。
+        model_kwargs={"request_timeout": 120},
+    )
     prompt = PROMPTS[prompt_key]
     return create_agent(model=llm, tools=tools, system_prompt=prompt)
 

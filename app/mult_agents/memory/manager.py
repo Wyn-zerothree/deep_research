@@ -223,7 +223,13 @@ class MemoryManager:
         if not api_key:
             return
         try:
-            self._summary_llm = ChatTongyi(model=summary_model, temperature=0.1, dashscope_api_key=api_key)
+            self._summary_llm = ChatTongyi(
+                model=summary_model,
+                temperature=0.1,
+                dashscope_api_key=api_key,
+                max_retries=2,
+                model_kwargs={"request_timeout": 120},
+            )
         except Exception as exc:
             logger.warning("摘要模型初始化失败，降级规则压缩: %s", exc)
             self._summary_llm = None
