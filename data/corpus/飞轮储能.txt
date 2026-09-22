@@ -1,0 +1,96 @@
+# 飞轮储能
+来源: https://zh.wikipedia.org/wiki/%E9%A3%9E%E8%BD%AE%E5%82%A8%E8%83%BD
+
+飞轮能量储存（，缩写：FES）系统是一种能量储存方式，它通过加速转子（飞轮）至极高速度的方式，用以将能量以旋转动能的形式储存于系统中。当释放能量时，根据能量守恒原理，飞轮的旋转速度会降低；而向系统中贮存能量时，飞轮的旋转速度则会相应地升高。
+
+大多数FES系统使用电流来控制飞轮速度，同时直接使用机械能的设备也正在研发当中。
+
+高能的FES系统所使用的转子是由高强度碳纤维制成的，并通过实现悬浮，在真空罩内转子的转速可达到20,000到50,000 rpm。这类飞轮可以在几分钟内达到所需的速度——远远快于其他形式的能量存储。
+
+主要元件 
+
+一个典型的FES系统包括一个用以减少摩擦力的真空室，内部配有由轴承支撑的转子，以及与之连接的一体化电动机和发电机。其中的轴承可以是滚珠、磁悬浮轴承等。
+
+第一代FES系统使用大型钢质飞轮，并配以机械轴承。新型系统则采用了碳纤维强化树脂复合飞轮，后者拥有更高的强度，质量上还比前者减轻了一个数量级。
+
+为了减少摩擦力，有时会使用替代机械轴承。
+
+由于早期的磁悬浮轴承需要在极低的温度下工作以达到超导（SC）状态，受限于高昂的造价故一直未得到发展，后来高温超导体（HTSC）的出现改变了这一状态。然而单纯的高温超导体磁悬浮轴承虽然能提供稳定可靠的支撑，但面对大型结构却难以提供必须的提升力。因此，目前多采用混合型磁悬浮轴承，即以永磁体支撑重载荷，而超导体使载荷稳定。超导体能保持载荷稳定是因为其卓越的抗磁性：如果飞轮偏离中心，由于效应，会产生一个回复力使之归中，这就是所谓的轴承的磁钢度。如果磁钢度和阻尼较低的话，则可能会发生转轴振动——这种超导磁体的固有问题，也使得纯超导体磁悬浮轴承难以在FES中应用。
+
+磁通钉扎效应是飞轮能够稳定悬浮的重要因素，这也使得高温超导体相较其它材料更适于FES系统。只要磁通钉扎效应足够强，高温超导体粉末就能形成任意形状。但在FES系统的实际运行中，由于超导材料的磁通蠕动（，或磁通运动（flux motion））效应，飞轮会逐渐下降、悬浮力也会减弱，如何克服这些问题则是FES中完全由超导体提供悬浮支撑力所要面临的持续挑战。
+
+物理特性
+
+能量密度
+飛輪轉子的最大能量密度主要依賴於兩個因素，第一個是轉子的幾何形狀，而第二個是所使用的材料的屬性。對於單一材料，各向同性轉子這種關係可表示為 
+
+,
+其中的變量的定義如下：
+ - 轉子的動能[J]
+ - 轉子的質量[kg]
+ - 轉子的幾何形狀係數[無量綱]
+ - 材料的拉伸強度[Pa]
+ - 材料的密度[kg/m^3]
+
+几何（形状因子）
+
+材料
+
+飞轮
+
+抗张强度
+
+能量效率
+
+陀螺效应
+
+万向环
+
+应用
+
+交通
+
+公路
+
+轨道交通
+
+电气化轨道
+
+实验室
+
+娱乐 
+在环球冒险岛的中，设有快速加速上坡启动，而不是典型的重力下降。 这是通过强大的牵引电机将赛车投入赛道实现的。 要实现加快雲霄飛車全速上坡需要短暂的非常高的电流，园区利用多种电动发电机组大飞轮。 如果没有这些储能单元，园区将不得不投资新的变电站，否则每次搭乘时都有可能使当地电网发生故障。
+
+脉冲电源 
+由于FES可以快速充放电，他们适用于补偿脉冲发电机
+
+Flywheel Energy Storage Systems (FESS) are found in a variety of applications ranging from grid-connected energy management to uninterruptible power supplies. With the progress of technology, there is fast renovation involved in FESS application. Examples include high power weapons, aircraft powertrains and shipboard power systems, where the system requires a very high-power for a short period in order of a few seconds and even milliseconds.Compensated pulsed alternator (compulsator) is one of the most popular choices of pulsed power supplies for fusion reactors, high-power pulsed lasers, and hypervelocity electromagnetic launchers because of its high energy density and power density, which is designed for FESS.
+
+摩托车
+
+电网
+
+风力发电机
+
+参见 
+
+ 储能技术
+ 插电式混合动力汽车（Plug-in hybrid, or PHEV）
+ 发射环
+ 蓄电池
+ 再生制動（Regenerative braking）
+ 雙電層電容器（EDLC） - 有時也被稱為電雙層電容器，或超级電容器。
+ 旋转动能
+
+参考
+
+扩展阅读
+ Beacon Power Applies for DOE Grants to Fund up to 50% of Two 20 MW Energy Storage Plants, Sep. 1, 2009
+
+外部链接
+Ricardo Kinergy project http://www.greencarcongress.com/2009/11/kinergy-20091124.html 
+Magnetal Whitepaper for its Green Energy Storage System - GESS http://www.magnetal.se/GESS.pdf 
+Magnetal analysis on gyro forces induced by flywheel energy storage - http://www.magnetal.se/MagnetalGyro.pdf 
+
+儲能技術
+旋转机械

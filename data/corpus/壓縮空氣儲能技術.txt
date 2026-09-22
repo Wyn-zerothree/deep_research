@@ -1,0 +1,36 @@
+# 壓縮空氣儲能技術
+来源: https://zh.wikipedia.org/wiki/%E5%A3%93%E7%B8%AE%E7%A9%BA%E6%B0%A3%E5%84%B2%E8%83%BD%E6%8A%80%E8%A1%93
+
+壓縮空氣儲能或壓縮空氣儲能技術（），簡稱CAES，是一種利用壓縮空氣來儲能的技術。民生上，離峰時段的能量得以儲存，並於尖峰時段釋放使用。小型系統長期以來一直用於礦山機車之推進等應用。由於散熱會降低存儲系統的能源效率，因此放大應用必須針對壓縮空氣進行熱量守恆控制。液態空氣儲能透過加壓空氣再冷卻來液化空氣，並儲存能量。在學術研究中會將其歸類為壓縮空氣儲能的一種。
+
+種類
+氣體壓縮會產生熱，因此壓縮後的空氣溫度較高。相反地，氣體膨脹會釋放熱。如果沒有額外的熱量進入系統，空氣溫度在膨脹後會顯著下降。如果能將壓縮所產生的熱儲存起來，並於膨脹時釋放，則儲能效率便能顯著提升。CAES系統控制熱量的方式主要分為絕熱、或恆溫等三類。
+
+儲存
+
+恆溫儲存
+
+恆壓儲存
+
+熱力學
+為了提升儲存與釋放過程的效率，因此一般採用近似可逆的等溫或等熵過程。
+
+另見 
+
+ 壓縮空氣車
+ 氣動力學
+
+參考資料
+
+外部連結
+
+ Compressed Air System of Paris – technical notes Part 1  Part 2  Part 3  Part 4  Part 5  Part 6   (Special supplement, Scientific American, 1921)
+ Solution to some of country’s energy woes might be little more than hot air  (Sandia National Labs, DoE).
+ MSNBC article, Cities to Store Wind Power for Later Use , January 4, 2006
+ Power storage: Trapped wind 
+ Catching The Wind In A Bottle A group of Midwest utilities is building a plant that will store excess wind power underground 
+ New York Times Article: Technology; Using Compressed Air To Store Up Electricity
+ Compressed Air Energy Storage, Entropy and Efficiency 
+
+儲能技術
+壓縮空氣動力

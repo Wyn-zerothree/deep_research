@@ -1,0 +1,33 @@
+# 波浪能
+来源: https://zh.wikipedia.org/wiki/%E6%B3%A2%E6%B5%AA%E8%83%BD
+
+{{Expand language|1=en|time=
+
+波浪能（）是海洋表面波浪運動所轉送的能量，可利用成為能源作不同用途，例如發電、海水淡化或推動抽水機等。
+
+海洋波浪是由太陽能源轉換而成的，因為太陽輻射的不均勻加熱與地殼冷卻及地球自轉造成風，風吹過海面又形成波浪，波浪所產生的能量與風速成一定比例。而波浪起伏造成水的運動，此運動包括波浪運動的位能差、往復力或浮力產生的動力來發電。
+
+波浪能發電
+2008年第一個試驗波浪能發電農場在葡萄牙開設，雖然自從1890年已有人嘗試使用波浪能，但商業上它目前仍未被廣泛採用。波浪能發電與潮汐能發電和海洋環流發電是不同的，波浪能發電的主要競爭對手是海上的离岸風力發電。2010 年代，许多国家的公共机构继续加大了对波浪能研究和开发的资助力度。 这包括欧盟、美国和英国，其年度拨款通常在 5-5000 万美元范围内。加上私人资金，这导致了大量正在进行的波浪能项目（参见波浪能项目列表）。
+
+参看 
+ 海水溫差發電法(,縮寫：OTEC)
+ 世界能源资源和消费（英文版）
+
+參考資料
+
+外部連結
+ "Ocean waves – our new electricity supplier" （Uppsala university 2010）
+ 
+ "Wave Power: The Coming Wave" from the Economist, June 5, 2008
+ "The untimely death of Salter's Duck"
+ "Ocean Power Fights Current Thinking" 
+ "Wave energy in New Zealand" 
+ Wave technologies: types of devices （LORC Knowledge 2011）
+ "How it works: Wave power station" 
+
+ 
+鲜绿环境主义
+能源转换
+发电站技术
+可持续技术
