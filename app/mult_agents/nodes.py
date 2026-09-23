@@ -1351,16 +1351,37 @@ def analyze_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
         "messages": messages,
     }
 
+def _build_gap_fallback_queries(missing_gaps: list, original_query: str) -> dict:
+    """补搜计划在 LLM 不可用时的兜底：把缺口描述本身当检索词。
+
+    这里**绝不能退回原问题**。以原问题补搜等于把第一轮原样重搜一遍，
+    证据零增量 → needs_more_research 永远为真 → 必然烧满 max_iterations，
+    且同一批文档换套 source_id 重复入池污染证据与忠实度。这是修掉的历史 bug。
+    """
+    gaps = [str(gap).strip() for gap in (missing_gaps or []) if str(gap).strip()][:6]
+    if not gaps:
+        gaps = [original_query]
+    return {
+        "reflection_summary": "默认补搜（按缺口逐条检索）",
+        "supplementary_queries": [
+            {
+                "section_id": f"gap_{index}",
+                "query": gap_text,
+                "source_preference": "hybrid",
+                "reason": "fallback：直接以缺口描述为检索词",
+            }
+            for index, gap_text in enumerate(gaps, 1)
+        ],
+    }
+
+
 def reflect_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
     logger.info("%s 开始 | agent=%s", colorize("[reflect]", "cyan"), colorize(agent_name, "magenta"))
 
     missing_gaps = state.get("missing_gaps", [])
     log_inputs("reflect", agent_name, {"missing_gaps": str(missing_gaps)})
 
-    fallback = {
-        "reflection_summary": "默认补搜",
-        "supplementary_queries": [{"section_id": "gap_1", "query": state["query"], "source_preference": "hybrid", "reason": "fallback"}]
-    }
+    fallback = _build_gap_fallback_queries(missing_gaps, state["query"])
 
     prompt = (
         f"分析师指出当前证据不足以完全回答问题，存在以下信息缺口：\n{json.dumps(missing_gaps, ensure_ascii=False)}\n\n"

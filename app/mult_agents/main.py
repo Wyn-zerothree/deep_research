@@ -180,6 +180,7 @@ def build_runtime_config(args: argparse.Namespace) -> AppConfig:
 class AgentBundle:
     intent_router: any
     planner: any
+    reflect: any
     scout_web: any
     scout_local: any
     evidence_judge: any
@@ -214,6 +215,7 @@ def build_agents(model: str, api_key: str, config: AppConfig) -> AgentBundle:
     return AgentBundle(
         intent_router=build_agent(model, api_key, "intent_router", 0.0, []),
         planner=build_agent(model, api_key, "plan", 0.3, []),
+        reflect=build_agent(model, api_key, "reflect", 0.4, []),
         scout_web=build_agent(model, api_key, "web_search", 0.4, []),
         scout_local=build_agent(model, api_key, "local_rag", 0.4, []),
         evidence_judge=build_agent(model, api_key, "deep_dive", 0.2, []),
