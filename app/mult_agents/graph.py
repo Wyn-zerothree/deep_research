@@ -35,11 +35,17 @@ def should_continue_research(state: ResearchState) -> str:
     # If we reached max iterations, stop and write report
     if iteration >= max_iter:
         return "write"
-        
+
+    # 上一轮补搜没能带回任何新证据：缺口不是靠多搜一轮能填上的，
+    # 再循环只会重复灌同一批材料。此时就算 analyst 仍标了 needs_more_research
+    # 也应当收手——上限是安全网，不该变成空转的固定开销。
+    if state.get("evidence_stalled", False):
+        return "write"
+
     # If analyst found missing gaps and requested more research, go to reflect
     if state.get("needs_more_research", False):
         return "reflect"
-        
+
     # Otherwise, we have enough evidence, go to write report
     return "write"
 

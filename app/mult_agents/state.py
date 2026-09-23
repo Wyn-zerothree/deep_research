@@ -31,6 +31,8 @@ class ResearchState(TypedDict):
     analysis: str
     needs_more_research: bool
     missing_gaps: list[str]
+    evidence_fingerprint_size: int
+    evidence_stalled: bool
     supplementary_queries: list[dict]
     findings: list[dict]
     claim_map: list[dict]
@@ -78,6 +80,8 @@ def create_initial_state(
         "analysis": "",
         "needs_more_research": False,
         "missing_gaps": [],
+        "evidence_fingerprint_size": 0,
+        "evidence_stalled": False,
         "supplementary_queries": [],
         "findings": [],
         "claim_map": [],

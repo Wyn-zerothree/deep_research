@@ -244,38 +244,29 @@ def _guess_primary_entity(query: str) -> str:
 
 
 def _derive_direct_search_queries(query: str) -> list[str]:
+    """围绕用户原句的兜底检索词——只有原句本身。
+
+    这里曾经按 entity 拼出「{entity} GitHub / 官方文档 / AI Agent」等变体。
+    那套后缀是照 AI/开发类话题写的，用到能源、政策类问题上完全跑偏（实测
+    出现过「台湾再生能源… GitHub」）。更糟的是它恰好产出 6 条，配合
+    _derive_search_plan 末尾的 [:6] 截断，会把大纲里 LLM 生成的、真正贴题的
+    领域检索词整段挤掉。领域相关性交给大纲去覆盖，这里只留原句兜底。
+    """
     base_query = query.strip()
-    if not base_query:
-        return []
-    entity = _guess_primary_entity(base_query)
-    candidates = [base_query]
-    if entity:
-        candidates.extend(
-            [
-                f"{entity}是什么",
-                f"{entity} GitHub",
-                f"{entity} 官方文档",
-                f"{entity} 使用趋势",
-                f"{entity} AI Agent",
-            ]
-        )
-    else:
-        candidates.extend(
-            [
-                f"{base_query} 是什么",
-                f"{base_query} GitHub",
-                f"{base_query} 官方文档",
-            ]
-        )
-    deduped: list[str] = []
-    for item in candidates:
-        text = item.strip()
-        if text and text not in deduped:
-            deduped.append(text)
-    return deduped[:6]
+    return [base_query] if base_query else []
 
 
 def _is_query_grounded(candidate: str, user_query: str) -> bool:
+    """判断候选检索词是否与原问题沾边。
+
+    阈值刻意取"命中 1 个 bigram 即通过"这种宽松口径：漏放（把贴题词误杀）是
+    **不可挽回**的——那份证据永远不会被取回；误收（放进一条跑题词）最多多花一次
+    Bocha 调用（¥0.036），且 scout 节点会把它判为无关丢进 rejected_source_ids。
+    已知代价：共享单个高频 bigram 就会通过，例如「2024年新能源汽车销量」借
+    「能源」混进能源类问题。收紧到 2 个连续 bigram 能挡住这例，但会误杀
+    「台湾 离岸风电 2035 目标」这类只共享实体词的合法检索词，故不采用。
+    另：繁体写法（台灣/綠能）与简体不共享 bigram，会被判为不相关。
+    """
     candidate_terms = set(_extract_query_terms(candidate))
     user_terms = set(_extract_query_terms(user_query))
     if not candidate_terms or not user_terms:
@@ -287,6 +278,12 @@ def _is_query_grounded(candidate: str, user_query: str) -> bool:
 
 
 def _derive_search_plan(outline: list[dict], sub_questions: list[str], _research_questions: list[str], query: str) -> list[dict]:
+    """组装首轮检索计划。
+
+    顺序沿用原设计（原句在前、大纲在后），但现在二者都能真正生效了：
+    原句只占 1 个槽位，不会再像过去那样用 6 条模板词把大纲挤干净；
+    _is_query_grounded 修好之后，大纲里 LLM 生成的领域检索词也能通过筛选。
+    """
     plan: list[dict] = []
     for direct_query in _derive_direct_search_queries(query):
         plan.append(
@@ -342,14 +339,31 @@ def _build_queries(state: ResearchState, source_preference: str) -> list[dict]:
 
 
 def _extract_query_terms(query: str) -> list[str]:
-    parts = re.findall(r"[一-鿿]{2,}|[A-Za-z0-9_-]{3,}", query.lower())
-    terms = []
-    stopwords = {"什么", "如何", "以及", "一个", "关于", "这个", "那个", "进行", "基于", "附带", "来源", "清单"}
-    for part in parts:
-        if part in stopwords:
+    """把查询切成可用于重叠比对的词元。
+
+    中文没有空格：原来用 [一-鿿]{2,} 会把整句切成**一个**超长词元，两条不同的
+    中文串于是永远没有交集。_is_query_grounded 因此把所有中文候选查询都判为
+    "不相关"——planner 生成的大纲 search_queries 一条都进不了检索计划，检索
+    长期只靠硬编码模板词在跑（代码注释与日志都能对上）。这里换成中文二元组
+    （bigram）近似分词，不引入分词库依赖；拉丁词仍按原样切分。
+    """
+    lowered = query.lower()
+    terms: list[str] = []
+    for run in re.findall(r"[一-鿿]+", lowered):
+        if len(run) == 1:
+            terms.append(run)
             continue
-        terms.append(part)
-    return terms[:12]
+        terms.extend(run[index:index + 2] for index in range(len(run) - 1))
+    terms.extend(re.findall(r"[a-z0-9_-]{3,}", lowered))
+    stopwords = {"什么", "如何", "以及", "一个", "关于", "这个", "那个", "进行", "基于", "附带", "来源", "清单"}
+    seen: set[str] = set()
+    unique: list[str] = []
+    for term in terms:
+        if term in stopwords or term in seen:
+            continue
+        seen.add(term)
+        unique.append(term)
+    return unique[:40]
 
 
 def _estimate_relevance(query: str, text: str) -> float:
@@ -1342,14 +1356,48 @@ def analyze_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
     needs_more_research = payload.get("needs_more_research", False)
     missing_gaps = payload.get("missing_gaps", [])
     analysis_summary = payload.get("analysis_summary", content)
+
+    # 补搜是否真的带回了新证据。证据池与前一轮一样大，说明缺口不是"搜得不够"
+    # 造成的——再搜只会把同一批材料换个 source_id 灌一遍，白烧 token。基线实测
+    # 12 题里 11 题跑满上限，其中相当一部分轮次就是这种空转。
+    evidence_size = len(_evidence_fingerprint(state))
+    previous_size = state.get("evidence_fingerprint_size", 0)
+    stalled = state.get("iteration", 0) > 0 and evidence_size <= previous_size
+    if stalled:
+        logger.warning(
+            "%s 本轮补搜未带回新证据（%s <= %s），停止反思循环以免空转",
+            colorize("[analyze]", "yellow"), evidence_size, previous_size,
+        )
+
     return {
         "analysis": analysis_summary,
         "findings": findings,
         "claim_map": claim_map,
         "needs_more_research": needs_more_research,
         "missing_gaps": missing_gaps,
+        "evidence_fingerprint_size": evidence_size,
+        "evidence_stalled": stalled,
         "messages": messages,
     }
+
+def _evidence_fingerprint(state: ResearchState) -> set[str]:
+    """给"真正不同的证据"打指纹，用来判断本轮补搜有没有带回新东西。
+
+    键取 doc_id/url + 片段前缀：同一份文档的不同片段算两条不同证据
+    （chunk 级口径，与 local_rag_node 内部的去重一致），避免把补搜新取的
+    片段误判为重复而提前收敛。
+    """
+    keys: set[str] = set()
+    for field in ("local_evidence", "web_evidence"):
+        for entry in state.get(field) or []:
+            if not isinstance(entry, dict):
+                continue
+            ident = str(entry.get("doc_id") or entry.get("url") or "").strip()
+            snippet = str(entry.get("snippet") or "").strip()
+            if ident or snippet:
+                keys.add(f"{ident}||{snippet[:200]}")
+    return keys
+
 
 def _build_gap_fallback_queries(missing_gaps: list, original_query: str) -> dict:
     """补搜计划在 LLM 不可用时的兜底：把缺口描述本身当检索词。
