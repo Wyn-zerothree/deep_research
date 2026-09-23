@@ -34,7 +34,14 @@ def load_eval_set() -> list[dict]:
 
 def main() -> int:
     items = load_eval_set()
-    print(f"评测集条目: {len(items)}")
+    excluded = [x for x in items if x.get("excluded")]
+    items = [x for x in items if not x.get("excluded")]
+    # 标了 excluded 的题不跑批，也不该算进召回的分子分母（否则分母里混着一条
+    # 永远不会被执行的题，Recall 会平白被拉低）。排除原因记在各条 excluded_reason。
+    print(
+        f"评测集条目: {len(items)}"
+        + (f" | 已排除 {len(excluded)} 条: {', '.join(x['id'] for x in excluded)}" if excluded else "")
+    )
 
     # 1) ground truth 文件存在性
     missing = []

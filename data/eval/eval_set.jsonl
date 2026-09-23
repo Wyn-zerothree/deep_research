@@ -33,7 +33,7 @@
 {"id": "q33", "category": "政策", "question": "请调研台湾风力发电的发展历程、装机规模与建设条件", "expected_sources": ["台灣風力發電.txt"]}
 {"id": "q34", "category": "政策", "question": "请分析台湾太阳能产业的产业链结构与发展现状", "expected_sources": ["台灣太陽能產業.txt"]}
 {"id": "q35", "category": "政策", "question": "请调研德国核能发电政策的转变过程与背后的驱动因素", "expected_sources": ["德國的核能發電.txt"]}
-{"id": "q36", "category": "政策", "question": "请系统分析核电存废问题的主要争议点与各方论据", "expected_sources": ["核電存廢問題.txt"]}
+{"id": "q36", "category": "政策", "question": "请系统分析核电存废问题的主要争议点与各方论据", "expected_sources": ["核電存廢問題.txt"], "excluded": true, "excluded_reason": "DashScope 输出端内容审核系统性命中：单轮 9 次 LLM 调用中 8 次被拦（7 次 DataInspectionFailed + 1 次网络超时），拿不到未被污染的证据。审核拦的是模型生成内容，输入不变则重跑结果不变，再试只是白烧钱。保留此条仅为记录排除原因，不参与跑批与召回校验。"}
 {"id": "q37", "category": "政策", "question": "请调研虚拟电厂的定义、运行机制与主要应用场景", "expected_sources": ["虛擬電廠.txt"]}
 {"id": "q38", "category": "政策", "question": "请分析化石燃料淘汰面临的主要争议、障碍与可行路径", "expected_sources": ["化石燃料淘汰.txt"]}
 {"id": "q39", "category": "政策", "question": "请调研碳交易市场的运作机制、主要类型与关键要素", "expected_sources": ["碳交易.txt"]}

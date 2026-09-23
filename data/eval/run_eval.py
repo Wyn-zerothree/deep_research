@@ -219,6 +219,12 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
     items = load_eval_set()
+    # 标了 excluded 的题已知跑不出可用样本（当前只有被审核系统性命中的政策题），
+    # 排除原因写在各自条目的 excluded_reason 里，别把它从测试集里悄悄删掉。
+    excluded = [x for x in items if x.get("excluded")]
+    items = [x for x in items if not x.get("excluded")]
+    if excluded:
+        print(f"已排除 {len(excluded)} 条: {', '.join(x['id'] for x in excluded)}（原因见 excluded_reason）")
     if args.ids:
         wanted = {x.strip() for x in args.ids.split(",") if x.strip()}
         items = [x for x in items if x["id"] in wanted]
