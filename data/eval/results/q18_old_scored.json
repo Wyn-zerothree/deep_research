@@ -1,0 +1,29 @@
+[
+  {
+    "id": "q18",
+    "category": "对比",
+    "retrieval_hit": true,
+    "citation_count": 16,
+    "citation_compliance": 1.0,
+    "degraded_nodes": 0,
+    "elapsed_seconds": 615.7,
+    "iterations": 3,
+    "faithfulness": 0.4166666666666667,
+    "faithfulness_counts": {
+      "supported": 5,
+      "partial": 0,
+      "unsupported": 7
+    },
+    "unsupported_claims": [
+      "工业电解槽实际工作电压多在1.8–2.2 V区间",
+      "实际大规模电解系统的系统能效（LHV基准）普遍徘徊于60%–72%之间",
+      "天然气蒸汽重整（SMR）主导全球约75%的氢气供应",
+      "SMR工艺在700–1100°C、15–30 bar条件下进行",
+      "SMR系统能效（LHV基准）可提升至65%–75%",
+      "未经CCS的天然气重整制氢全生命周期碳排放约为9–12 kg CO₂/kg H₂",
+      "煤制氢全生命周期碳排放达18–25 kg CO₂/kg H₂"
+    ],
+    "relevance": 0.95,
+    "relevance_reason": "报告正面聚焦用户要求的三大维度（技术路线、成本、碳排放），对电解水与化石燃料制氢（以SMR为主、兼顾煤制氢）进行了系统性、有数据支撑的对比分析；关键子问题全部覆盖，且明确指出成本数据缺失这一事实本身即是对该子问题的实质性回应；无偏题内容，所有论述均紧密围绕对比分析展开。"
+  }
+]

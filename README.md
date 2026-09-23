@@ -130,6 +130,7 @@ python app/mult_agents/rag/ingest.py data/corpus --chunk-size 300   # 换分块�
 | `data/eval/run_eval.py` | 跑完整流水线并导出 JSONL：token 用量折算成本、降级节点数、审核拦截数、非法引用数 |
 | `data/eval/score_runs.py` | LLM-as-judge 打分：忠实度（claim 级）+ 相关性 |
 | `data/corpus/` | 73 篇能源领域语料，每篇首行带维基来源 URL |
+| `data/eval/results/` | 原始打分输出 —— 本节两张表的数据来源，未编辑（含每题被判不支持的论断原文） |
 
 ```bash
 python data/eval/verify_eval_set.py                                  # 校验题目与检索召回

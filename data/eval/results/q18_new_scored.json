@@ -1,0 +1,24 @@
+[
+  {
+    "id": "q18",
+    "category": "对比",
+    "retrieval_hit": true,
+    "citation_count": 26,
+    "citation_compliance": 1.0,
+    "degraded_nodes": 0,
+    "elapsed_seconds": 927.5,
+    "iterations": 3,
+    "faithfulness": 0.75,
+    "faithfulness_counts": {
+      "supported": 8,
+      "partial": 2,
+      "unsupported": 2
+    },
+    "unsupported_claims": [
+      "化石燃料制氢耦合CCS后，净封存效率仅为6–56%",
+      "每生产1 kg氢气约需消耗50–55 kWh电力"
+    ],
+    "relevance": 0.95,
+    "relevance_reason": "报告正面且系统性地回答了用户关于电解水与化石燃料制氢在技术路线、成本、碳排放三方面的对比问题，覆盖全部关键子问题；虽明确说明成本数据缺失，但基于原理进行了严谨的逻辑推演和边界分析，无实质性偏题内容。"
+  }
+]
