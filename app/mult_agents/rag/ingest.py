@@ -2,14 +2,19 @@
 
 用法（从仓库根目录执行）：
     python app/mult_agents/rag/ingest.py <文件或目录>
+    python app/mult_agents/rag/ingest.py data/corpus --chunk-size 300
 
 目录会递归收集 *.txt / *.md / *.markdown。Milvus 连接信息与 collection
 名称取自 config.json / 环境变量，优先级为 环境变量 > config.json > 默认值。
+
+换分块粒度做对比实验时，配合环境变量换集合名，别覆盖生产集合：
+    MILVUS_RAG_COLLECTION=mult_agent_knowledge_c300 python ... --chunk-size 300
 """
 
 import argparse
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 # 将 app/ 加入 sys.path，使本脚本可从仓库任意目录以脚本方式执行
@@ -38,6 +43,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="把本地文档写入 Milvus 知识库")
     parser.add_argument("path", help="要入库的文件或目录")
     parser.add_argument("--config", default=None, help="config.json 路径，默认仓库根目录下的 config.json")
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=None,
+        help="分块字符数，默认沿用 RAGConfig 的 500；改粒度做对比时同时换集合名",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.path).expanduser().resolve()
@@ -49,19 +60,19 @@ def main() -> None:
         raise ValueError(f"未找到可入库文件（{'/'.join(SUPPORTED_SUFFIXES)}）: {input_path}")
 
     config = AppConfig.from_file(args.config)
-    rag = RAGSystem(
-        api_key=config.api_key,
-        config=RAGConfig(
-            milvus_host=config.milvus_host,
-            milvus_port=config.milvus_port,
-            collection_name=config.milvus_rag_collection,
-        ),
+    rag_config = RAGConfig(
+        milvus_host=config.milvus_host,
+        milvus_port=config.milvus_port,
+        collection_name=config.milvus_rag_collection,
     )
+    if args.chunk_size is not None:
+        rag_config = replace(rag_config, chunk_size=args.chunk_size)
+    rag = RAGSystem(api_key=config.api_key, config=rag_config)
 
     total_chunks = rag.ingest_paths(paths)
     print(
         f"入库完成 | 文件数={len(paths)} | chunk数={total_chunks} | "
-        f"collection={config.milvus_rag_collection}"
+        f"chunk_size={rag_config.chunk_size} | collection={config.milvus_rag_collection}"
     )
 
 
