@@ -151,10 +151,12 @@ def extract_citation_ids(text: str) -> list[str]:
 
 
 def count_search_queries(result: dict) -> tuple[int, int]:
-    """统计本轮实际发出的检索查询数（网页, 本地）。
+    """统计本轮的检索计划条目数（网页, 本地）。
 
-    网页查询数就是开启 Bocha 后的真实计费次数——每条 trace 对应一次 HTTP 调用。
-    导出它，是为了让跑之前能按实测算额度消耗，而不是靠读代码估。
+    注意：这是"计划发出的查询数"，不是"真实计费的 HTTP 次数"。web_search_node
+    对每条查询都无条件追加一条 trace（nodes.py:1060），即便 Bocha 未配置、
+    返回空结果也照记。所以关闭 Bocha 跑出来的 web_query_count 是计划数而非账单数；
+    只有在 Bocha 开启时二者才相等（一条 trace = 一次计费调用）。
     """
     return len(result.get("web_search_trace") or []), len(result.get("local_rag_trace") or [])
 
