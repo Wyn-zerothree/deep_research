@@ -91,18 +91,50 @@ class TokenCounter(BaseCallbackHandler):
 
 
 class DegradeCounter(logging.Handler):
-    """统计本轮有多少节点因为 LLM 失败走了降级路径。"""
+    """统计本轮有多少节点因为 LLM 失败走了降级路径，并区分失败原因。
+
+    区分原因是为了决定"要不要重跑"：内容审核（DataInspectionFailed，HTTP 400）
+    是 DashScope 对**模型生成内容**的拦截，输入不变时重跑大概率还是被拦，只会把
+    同一题的费用乘以重试次数；账户欠费更是全量拒绝。只有网络抖动/超时这类失败
+    才值得重跑。
+    """
+
+    MODERATION_MARKS = ("DataInspectionFailed", "inappropriate content")
+    FATAL_MARKS = ("Arrearage", "欠费")
 
     def __init__(self) -> None:
         super().__init__(level=logging.WARNING)
         self.count = 0
+        self.moderation_count = 0
+        self.fatal_count = 0
 
     def reset(self) -> None:
         self.count = 0
+        self.moderation_count = 0
+        self.fatal_count = 0
+
+    @property
+    def retryable(self) -> bool:
+        """本轮降级是否还有重跑价值（排除内容审核与欠费这类确定性失败）。"""
+        return self.count > self.moderation_count + self.fatal_count
+
+    @property
+    def block_reason(self) -> str:
+        if self.moderation_count:
+            return "内容审核拦截"
+        if self.fatal_count:
+            return "账户欠费/拒绝服务"
+        return ""
 
     def emit(self, record: logging.LogRecord) -> None:
-        if DEGRADE_MARK in record.getMessage():
-            self.count += 1
+        message = record.getMessage()
+        if DEGRADE_MARK not in message:
+            return
+        self.count += 1
+        if any(mark in message for mark in self.MODERATION_MARKS):
+            self.moderation_count += 1
+        elif any(mark in message for mark in self.FATAL_MARKS):
+            self.fatal_count += 1
 
 
 def load_eval_set() -> list[dict]:
@@ -209,6 +241,7 @@ def main() -> int:
     total_elapsed = 0.0
     bypassed_count = 0
     fallback_count = 0
+    blocked_count = 0
     with args.output.open("a", encoding="utf-8") as fh:
         for index, item in enumerate(pending, 1):
             # 网络抖动会让某些节点的 LLM 调用失败并降级。降级过的样本答案不完整，
@@ -241,6 +274,14 @@ def main() -> int:
                 answer = str(result.get("final") or "")
                 is_fallback = FALLBACK_REPORT_MARK in answer
                 if not is_fallback and counter.count <= args.max_degrade:
+                    break
+                # 内容审核/欠费这类确定性失败重跑结果不变，直接接受本轮结果并标记，
+                # 别把同一题的钱白花在注定失败的重试上。
+                if not counter.retryable:
+                    print(
+                        f"    [跳过重试] {item['id']} 本轮降级由{counter.block_reason}引起，"
+                        f"重跑结果不变，接受本轮结果（已标记）"
+                    )
                     break
                 if attempt >= args.retries:
                     break
@@ -282,6 +323,8 @@ def main() -> int:
                 "valid_source_ids": sorted(valid_ids),
                 "invalid_citations": sorted({c for c in cited if c not in valid_ids}),
                 "degraded_nodes": counter.count,
+                "moderation_blocks": counter.moderation_count,
+                "fatal_errors": counter.fatal_count,
                 "answer_is_fallback": is_fallback,
                 "retries_used": attempt,
                 "elapsed_seconds": round(elapsed, 1),
@@ -302,6 +345,12 @@ def main() -> int:
             if is_fallback:
                 fallback_count += 1
                 print(f"    [警告] {item['id']} 最终答案是降级报告，不能用于忠实度/相关性打分")
+            if record["moderation_blocks"]:
+                blocked_count += 1
+                print(
+                    f"    [警告] {item['id']} 有 {record['moderation_blocks']} 个节点被 DashScope "
+                    f"内容审核拦截并降级，该条证据是未经 LLM 过滤的原始语料"
+                )
             status = "ERROR" if error else ("BYPASSED" if bypassed else ("FALLBACK" if is_fallback else "ok"))
             print(
                 f"[{index}/{len(pending)}] {item['id']} {status} | "
@@ -329,6 +378,11 @@ def main() -> int:
         print(
             f"\n[!] {fallback_count}/{len(pending)} 条最终产出的是降级报告（重试 {args.retries} 次仍失败）。"
             f"\n    多为网络/API 故障所致，建议网络恢复后重跑这些题。"
+        )
+    if blocked_count:
+        print(
+            f"\n[!] {blocked_count}/{len(pending)} 条被 DashScope 内容审核拦截过（moderation_blocks > 0）。"
+            f"\n    被拦节点的证据是未经 LLM 过滤的原始语料，打分时应单独看待或排除。"
         )
     print(f"结果写入 {args.output}")
     return 0
