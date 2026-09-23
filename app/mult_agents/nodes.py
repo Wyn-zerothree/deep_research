@@ -633,42 +633,23 @@ def _fallback_audit(state: ResearchState) -> dict:
     }
 
 
-def _fallback_analysis(state: ResearchState) -> dict:
-    source_ids = [item.get("source_id") for item in state.get("evidence_pool", [])[:3] if item.get("source_id")]
-    findings = [
-        {
-            "claim_id": "c_1",
-            "claim": f"围绕“{state['query']}”已完成多源检索，初步证据表明问题可以从网络与本地知识库双侧支撑。",
-            "confidence": "medium" if source_ids else "low",
-            "source_ids": source_ids,
-        }
-    ]
-    hypothesis_status = []
-    for hypo in state.get("hypotheses", []):
-        hypothesis_status.append(
-            {
-                "id": hypo.get("id"),
-                "status": "verified" if source_ids else "uncertain",
-                "reason": "已有可用证据池" if source_ids else "证据不足",
-                "source_ids": source_ids,
-            }
-        )
-    return {
-        "analysis_summary": "完成结论归纳与假设状态整理。",
-        "hypothesis_status": hypothesis_status,
-        "findings": findings,
-        "claim_map": [{"claim_id": item["claim_id"], "source_ids": item["source_ids"]} for item in findings],
-        "next_actions": [] if source_ids else ["补充更多高质量来源"],
-    }
-
-
 def _render_fallback_report(state: ResearchState) -> str:
-    lines = ["# 调研结果", "", "## 执行摘要", state.get("analysis", "暂无分析结果"), ""]
-    lines.append("## 任务规划与假设状态")
-    for hypo in state.get("hypotheses", []):
-        status = hypo.get("status", "unverified")
-        lines.append(f"- {hypo.get('id', 'h')}: {hypo.get('content', '')} | 状态: {status}")
-    lines.append("")
+    lines = [
+        "> 写作模型本次调用失败，以下为系统依据已有结论自动汇总的降级报告（未经润色）。",
+        "",
+        "# 调研结果",
+        "",
+        "## 执行摘要",
+        state.get("analysis", "暂无分析结果"),
+        "",
+    ]
+    hypotheses = state.get("hypotheses", [])
+    if hypotheses:
+        lines.append("## 任务规划与假设状态")
+        for hypo in hypotheses:
+            status = hypo.get("status", "unverified")
+            lines.append(f"- {hypo.get('id', 'h')}: {hypo.get('content', '')} | 状态: {status}")
+        lines.append("")
     lines.append("## 核心结论")
     for finding in state.get("findings", []):
         refs = "".join(f"[{source_id}]" for source_id in finding.get("source_ids", []))
@@ -1303,12 +1284,36 @@ def deep_dive_node(state: ResearchState, agent, agent_name: str) -> ResearchStat
 
 
 def _fallback_analysis(state: ResearchState) -> dict:
+    """分析模型不可用时的降级：把证据池直接投影成 findings。
+
+    只做搬运、不做推断——claim 明确标注"未经分析"、confidence 一律 low。
+    不这么做的话，上游一次失败会静默掏空下游写作，最终产出空报告。
+    """
+    pool = list(state.get("evidence_pool") or [])
+    if not pool:
+        pool = list(state.get("local_evidence") or []) + list(state.get("web_evidence") or [])
+    findings: list[dict] = []
+    claim_map: list[dict] = []
+    for index, item in enumerate(pool[:20], 1):
+        source_id = str(item.get("source_id") or "").strip()
+        title = str(item.get("title") or source_id or "证据").strip()
+        snippet = str(item.get("snippet") or "").strip().replace("\n", " ")
+        claim_id = f"c_{index}"
+        findings.append(
+            {
+                "claim_id": claim_id,
+                "claim": f"[未经分析，直接摘录] {title}：{snippet[:200]}",
+                "confidence": "low",
+                "source_ids": [source_id] if source_id else [],
+            }
+        )
+        claim_map.append({"claim_id": claim_id, "source_ids": [source_id] if source_id else []})
     return {
-        "analysis_summary": "默认分析结论",
+        "analysis_summary": "分析模型本次调用失败，以下结论未经分析，仅为证据摘录。",
         "needs_more_research": False,
         "missing_gaps": [],
-        "findings": [],
-        "claim_map": [],
+        "findings": findings,
+        "claim_map": claim_map,
         "next_actions": [],
     }
 
@@ -1376,26 +1381,6 @@ def reflect_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
         "messages": messages,
     }
 
-def _fallback_report(state: ResearchState) -> str:
-    """写作模型不可用时的降级报告：只做搬运，不生成新结论。"""
-    findings = state.get("findings", [])
-    lines = [
-        "> 写作模型本次调用失败，以下为系统依据已有结论自动汇总的降级报告（未经润色）。",
-        "",
-        f"# {state.get('query', '研究报告')}",
-        "",
-    ]
-    if not findings:
-        lines.append("本轮未产出可用结论。")
-    for item in findings:
-        if isinstance(item, dict):
-            parts = [str(value) for value in item.values() if value]
-            lines.append(f"- {' | '.join(parts)}")
-        else:
-            lines.append(f"- {item}")
-    return "\n".join(lines)
-
-
 def write_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
     logger.info("%s 开始 | agent=%s", colorize("[write]", "cyan"), colorize(agent_name, "magenta"))
     valid_source_ids = [str(item.get("source_id", "")).strip() for item in state.get("source_index", []) if item.get("source_id")]
@@ -1421,7 +1406,7 @@ def write_node(state: ResearchState, agent, agent_name: str) -> ResearchState:
 
     # 彻底断开之前的 messages 累积，只给模型当前这一条指令，避免被前面的 JSON 带偏
     result = _safe_invoke(agent, human, "write")
-    content = _last_content(result) if result is not None else _fallback_report(state)
+    content = _last_content(result) if result is not None else _render_fallback_report(state)
 
     # 强制清理可能的错误 JSON 代码块
     content = re.sub(r"^```json\s*", "", content)
