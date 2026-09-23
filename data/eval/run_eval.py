@@ -115,8 +115,15 @@ class DegradeCounter(logging.Handler):
 
     @property
     def retryable(self) -> bool:
-        """本轮降级是否还有重跑价值（排除内容审核与欠费这类确定性失败）。"""
-        return self.count > self.moderation_count + self.fatal_count
+        """本轮降级是否还有重跑价值。
+
+        只有纯网络抖动/超时值得重跑。内容审核（DataInspectionFailed）与欠费是
+        确定性的：审核拦的是**模型生成内容**，输入不变时重跑大概率仍被拦；而且
+        只要有一处被拦，那个节点的证据就已换成未经 LLM 过滤的原始语料，记录已经
+        污染，重跑换不回一条干净样本。实测 q36 单轮 8 次调用里 7 次被拦，若因为
+        "还夹着 1 次网络失败" 就去重跑，只会把同一题白烧满重试次数。
+        """
+        return self.count > 0 and self.moderation_count == 0 and self.fatal_count == 0
 
     @property
     def block_reason(self) -> str:
