@@ -22,6 +22,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "app"))
 
+from langchain_core.callbacks import BaseCallbackHandler  # noqa: E402
 from langgraph.checkpoint.memory import InMemorySaver  # noqa: E402
 
 from mult_agents.config import AppConfig  # noqa: E402
@@ -34,6 +35,59 @@ DEFAULT_OUTPUT = Path(__file__).resolve().parent / "runs" / "runs.jsonl"
 DEGRADE_MARK = "LLM 调用失败，已降级"
 # 降级报告的固定开头，用来识别"这份答案是降级产物而非模型正常产出"
 FALLBACK_REPORT_MARK = "写作模型本次调用失败"
+
+
+# 模型的 token 单价（元 / 百万 token），只用于把用量折算成钱。这是促销参考价，
+# 会随模型版本和地域变动，以阿里云百炼官网为准；用来比数量级够，别当账单。
+PRICE_PER_MILLION = {
+    "qwen-plus": (0.8, 2.0),
+    "qwen-turbo": (0.3, 0.6),
+}
+
+
+def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float | None:
+    price = PRICE_PER_MILLION.get(model)
+    if not price:
+        return None
+    return input_tokens / 1_000_000 * price[0] + output_tokens / 1_000_000 * price[1]
+
+
+class TokenCounter(BaseCallbackHandler):
+    """累计本轮所有 LLM 调用的 token 用量。
+
+    一轮评测动辄几十次调用，只看单次没有意义；而账单是延迟出账的，
+    事后再想核算就对不上了。所以跑的时候就把它攒下来。
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    def reset(self) -> None:
+        self.calls = 0
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    def on_llm_end(self, response, **kwargs) -> None:
+        usage = (getattr(response, "llm_output", None) or {}).get("token_usage") or {}
+        if not usage:
+            # ChatTongyi 把 token_usage 挂在 message.response_metadata 上，
+            # 不一定出现在 llm_output 里，两条路都试。
+            for generations in getattr(response, "generations", None) or []:
+                for generation in generations:
+                    message = getattr(generation, "message", None)
+                    usage = (getattr(message, "response_metadata", None) or {}).get("token_usage") or {}
+                    if usage:
+                        break
+                if usage:
+                    break
+        if not usage:
+            return
+        self.calls += 1
+        self.input_tokens += int(usage.get("input_tokens") or 0)
+        self.output_tokens += int(usage.get("output_tokens") or 0)
 
 
 class DegradeCounter(logging.Handler):
@@ -146,6 +200,9 @@ def main() -> int:
 
     counter = DegradeCounter()
     logging.getLogger("mult_agents").addHandler(counter)
+    tokens = TokenCounter()
+    total_input_tokens = 0
+    total_output_tokens = 0
 
     total_elapsed = 0.0
     bypassed_count = 0
@@ -158,6 +215,7 @@ def main() -> int:
             delay = args.retry_delay
             while True:
                 counter.reset()
+                tokens.reset()
                 state = create_initial_state(
                     query=item["question"],
                     max_iterations=config.max_iterations,
@@ -168,7 +226,12 @@ def main() -> int:
                 started = time.time()
                 error = None
                 try:
-                    result = app.invoke(state, {"configurable": {"thread_id": f"eval_{item['id']}"}})
+                    # callbacks 必须走 config：节点内部是通过 ensure_config() 把
+                    # 外层 config 带进 agent.invoke() 的，否则这里挂的计数器收不到用量。
+                    result = app.invoke(
+                        state,
+                        {"configurable": {"thread_id": f"eval_{item['id']}"}, "callbacks": [tokens]},
+                    )
                 except Exception as exc:
                     result = {}
                     error = f"{type(exc).__name__}: {exc}"
@@ -185,6 +248,8 @@ def main() -> int:
                 time.sleep(delay)
                 delay *= 2
             total_elapsed += elapsed
+            total_input_tokens += tokens.input_tokens
+            total_output_tokens += tokens.output_tokens
 
             cited = extract_citation_ids(answer)
             web_queries, local_queries = count_search_queries(result)
@@ -208,6 +273,9 @@ def main() -> int:
                 "citation_count": len(cited),
                 "web_query_count": web_queries,
                 "local_query_count": local_queries,
+                "llm_calls": tokens.calls,
+                "input_tokens": tokens.input_tokens,
+                "output_tokens": tokens.output_tokens,
                 "cited_ids": cited,
                 "valid_source_ids": sorted(valid_ids),
                 "invalid_citations": sorted({c for c in cited if c not in valid_ids}),
@@ -238,10 +306,18 @@ def main() -> int:
                 f"{elapsed:.0f}s | contexts={len(record['contexts'])} | "
                 f"引文={record['citation_count']} | 非法={len(record['invalid_citations'])} | "
                 f"轮数={record['iterations']} | 降级={record['degraded_nodes']} | "
-                f"查询={web_queries}网页/{local_queries}本地"
+                f"查询={web_queries}网页/{local_queries}本地 | "
+                f"token={tokens.input_tokens}进/{tokens.output_tokens}出（{tokens.calls}次调用）"
             )
 
     print(f"\n总耗时 {total_elapsed / 60:.1f} min | 平均 {total_elapsed / len(pending):.0f}s/题")
+    total_tokens = total_input_tokens + total_output_tokens
+    cost = estimate_cost(config.model, total_input_tokens, total_output_tokens)
+    cost_text = f"≈ {cost:.3f} 元" if cost is not None else "（该模型不在单价表内，未折算）"
+    print(
+        f"token 消耗：输入 {total_input_tokens:,} | 输出 {total_output_tokens:,} | 合计 {total_tokens:,}"
+    )
+    print(f"折算成本 {cost_text}（模型 {config.model}，按促销参考价估算，不是账单数）")
     if bypassed_count:
         print(
             f"\n[!] {bypassed_count}/{len(pending)} 条被路由到 direct_answer，未经检索流水线。"

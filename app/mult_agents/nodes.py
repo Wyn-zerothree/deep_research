@@ -7,6 +7,7 @@ import re
 from functools import partial
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import ensure_config
 
 from .state import ResearchState
 from .tools import bocha_web_search_records, search_knowledge_base_records
@@ -169,7 +170,11 @@ def _safe_invoke(agent, human: HumanMessage, node: str):
     降级必须"响亮"：WARNING 日志带上节点名与异常类型，便于评测时统计降级次数。
     """
     try:
-        return agent.invoke({"messages": [human]})
+        # 显式带上当前 runnable 的 config：调用方（如评测脚本）挂在 config 上的
+        # callback 才能收到这次调用的 token 用量。节点内裸 agent.invoke() 会断掉
+        # callback 传播链。ensure_config() 在没有外层 config 时返回默认配置，
+        # 行为与原来一致。
+        return agent.invoke({"messages": [human]}, config=ensure_config())
     except Exception as exc:
         logger.warning(
             "%s LLM 调用失败，已降级: %s: %s",
