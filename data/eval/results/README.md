@@ -10,7 +10,9 @@
 | `cmp_new_scored.json` | 修复后（与上面同一批题目、同一次跑批） | q01 q11 q13 q23 q25 q41 |
 | `q18_old_scored.json` | 修复前基线 | q18 |
 | `q18_new_scored.json` | 修复后 | q18 |
-| `verify_chunk_sizes.log` | 三档 `chunk_size` 的检索召回原始输出 | 49 题 |
+| `verify_chunk_sizes.txt` | 三档 `chunk_size` 的检索召回原始输出 | 49 题 |
+
+末尾这个文件用 `.txt` 而非 `.log`：仓库 `.gitignore` 忽略了 `*.log`（运行日志类），`git add` 会**静默跳过**被忽略的文件，改扩展名是为了让它能进版本库。
 
 q18 为什么单独成对：它第一次跑出来的新记录是**降级报告**（7 次调用全部 `ConnectionError`，纯网络故障），已作废重跑；这里放的是重跑后的干净记录（`degraded_nodes=0`）。
 
