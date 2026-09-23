@@ -32,6 +32,8 @@ from mult_agents.state import create_initial_state  # noqa: E402
 EVAL_SET = Path(__file__).resolve().parent / "eval_set.jsonl"
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "runs" / "runs.jsonl"
 DEGRADE_MARK = "LLM 调用失败，已降级"
+# 降级报告的固定开头，用来识别"这份答案是降级产物而非模型正常产出"
+FALLBACK_REPORT_MARK = "写作模型本次调用失败"
 
 
 class DegradeCounter(logging.Handler):
@@ -100,6 +102,14 @@ def main() -> int:
     parser.add_argument("--ids", type=str, default=None, help="只跑指定 id，逗号分隔")
     parser.add_argument("--max-iterations", type=int, default=None)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--max-degrade",
+        type=int,
+        default=0,
+        help="允许的降级节点数上限，超过则重跑该题（默认 0，即任何降级都重跑）",
+    )
+    parser.add_argument("--retries", type=int, default=2, help="每题最多重跑次数")
+    parser.add_argument("--retry-delay", type=float, default=20.0, help="首次重跑前等待秒数，之后指数退避")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
@@ -130,27 +140,43 @@ def main() -> int:
 
     total_elapsed = 0.0
     bypassed_count = 0
+    fallback_count = 0
     with args.output.open("a", encoding="utf-8") as fh:
         for index, item in enumerate(pending, 1):
-            counter.reset()
-            state = create_initial_state(
-                query=item["question"],
-                max_iterations=config.max_iterations,
-                user_id="eval_user",
-                tenant_id="eval_tenant",
-                memory_context="",
-            )
-            started = time.time()
-            error = None
-            try:
-                result = app.invoke(state, {"configurable": {"thread_id": f"eval_{item['id']}"}})
-            except Exception as exc:
-                result = {}
-                error = f"{type(exc).__name__}: {exc}"
-            elapsed = time.time() - started
+            # 网络抖动会让某些节点的 LLM 调用失败并降级。降级过的样本答案不完整，
+            # 混进评测会污染指标，所以自动重跑；重跑间隔指数退避。
+            attempt = 0
+            delay = args.retry_delay
+            while True:
+                counter.reset()
+                state = create_initial_state(
+                    query=item["question"],
+                    max_iterations=config.max_iterations,
+                    user_id="eval_user",
+                    tenant_id="eval_tenant",
+                    memory_context="",
+                )
+                started = time.time()
+                error = None
+                try:
+                    result = app.invoke(state, {"configurable": {"thread_id": f"eval_{item['id']}"}})
+                except Exception as exc:
+                    result = {}
+                    error = f"{type(exc).__name__}: {exc}"
+                elapsed = time.time() - started
+                answer = str(result.get("final") or "")
+                is_fallback = FALLBACK_REPORT_MARK in answer
+                if not is_fallback and counter.count <= args.max_degrade:
+                    break
+                if attempt >= args.retries:
+                    break
+                attempt += 1
+                reason = "答案是降级报告" if is_fallback else f"{counter.count} 个节点降级"
+                print(f"    [重试 {attempt}/{args.retries}] {item['id']} {reason}，{delay:.0f}s 后重跑")
+                time.sleep(delay)
+                delay *= 2
             total_elapsed += elapsed
 
-            answer = str(result.get("final") or "")
             cited = extract_citation_ids(answer)
             valid_ids = {
                 str(entry.get("source_id") or "").strip()
@@ -174,6 +200,8 @@ def main() -> int:
                 "valid_source_ids": sorted(valid_ids),
                 "invalid_citations": sorted({c for c in cited if c not in valid_ids}),
                 "degraded_nodes": counter.count,
+                "answer_is_fallback": is_fallback,
+                "retries_used": attempt,
                 "elapsed_seconds": round(elapsed, 1),
                 "error": error,
                 "run_at": datetime.now().isoformat(timespec="seconds"),
@@ -189,7 +217,10 @@ def main() -> int:
                     f"    [警告] {item['id']} 被路由到 direct_answer，未经过检索流水线，"
                     f"该条对评测无效（题面需要包含调研/分析/对比等研究型措辞）"
                 )
-            status = "ERROR" if error else ("BYPASSED" if bypassed else "ok")
+            if is_fallback:
+                fallback_count += 1
+                print(f"    [警告] {item['id']} 最终答案是降级报告，不能用于忠实度/相关性打分")
+            status = "ERROR" if error else ("BYPASSED" if bypassed else ("FALLBACK" if is_fallback else "ok"))
             print(
                 f"[{index}/{len(pending)}] {item['id']} {status} | "
                 f"{elapsed:.0f}s | contexts={len(record['contexts'])} | "
@@ -202,6 +233,11 @@ def main() -> int:
         print(
             f"\n[!] {bypassed_count}/{len(pending)} 条被路由到 direct_answer，未经检索流水线。"
             f"\n    这些记录的答案是模型参数化知识，不能用于评测忠实度/检索指标。"
+        )
+    if fallback_count:
+        print(
+            f"\n[!] {fallback_count}/{len(pending)} 条最终产出的是降级报告（重试 {args.retries} 次仍失败）。"
+            f"\n    多为网络/API 故障所致，建议网络恢复后重跑这些题。"
         )
     print(f"结果写入 {args.output}")
     return 0
