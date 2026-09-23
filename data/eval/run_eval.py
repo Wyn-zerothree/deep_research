@@ -96,6 +96,15 @@ def extract_citation_ids(text: str) -> list[str]:
     return re.findall(r"\[((?:WEB|LOC)\d+_\d+-\d+)\]", text or "")
 
 
+def count_search_queries(result: dict) -> tuple[int, int]:
+    """统计本轮实际发出的检索查询数（网页, 本地）。
+
+    网页查询数就是开启 Bocha 后的真实计费次数——每条 trace 对应一次 HTTP 调用。
+    导出它，是为了让跑之前能按实测算额度消耗，而不是靠读代码估。
+    """
+    return len(result.get("web_search_trace") or []), len(result.get("local_rag_trace") or [])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="deep_research eval runner")
     parser.add_argument("--limit", type=int, default=None, help="最多跑多少条")
@@ -178,6 +187,7 @@ def main() -> int:
             total_elapsed += elapsed
 
             cited = extract_citation_ids(answer)
+            web_queries, local_queries = count_search_queries(result)
             valid_ids = {
                 str(entry.get("source_id") or "").strip()
                 for entry in (result.get("source_index") or [])
@@ -196,6 +206,8 @@ def main() -> int:
                 "iterations": result.get("iteration"),
                 "intent": result.get("intent"),
                 "citation_count": len(cited),
+                "web_query_count": web_queries,
+                "local_query_count": local_queries,
                 "cited_ids": cited,
                 "valid_source_ids": sorted(valid_ids),
                 "invalid_citations": sorted({c for c in cited if c not in valid_ids}),
@@ -225,7 +237,8 @@ def main() -> int:
                 f"[{index}/{len(pending)}] {item['id']} {status} | "
                 f"{elapsed:.0f}s | contexts={len(record['contexts'])} | "
                 f"引文={record['citation_count']} | 非法={len(record['invalid_citations'])} | "
-                f"轮数={record['iterations']} | 降级={record['degraded_nodes']}"
+                f"轮数={record['iterations']} | 降级={record['degraded_nodes']} | "
+                f"查询={web_queries}网页/{local_queries}本地"
             )
 
     print(f"\n总耗时 {total_elapsed / 60:.1f} min | 平均 {total_elapsed / len(pending):.0f}s/题")
