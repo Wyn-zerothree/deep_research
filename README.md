@@ -100,10 +100,11 @@ npm run dev
 
 ### 知识库入库（可选，需要 Milvus）
 
-`local_rag` 节点从 Milvus 的 `MILVUS_COLLECTION` 集合检索。把本地文档灌进去：
+`local_rag` 节点从 Milvus 的 `MILVUS_RAG_COLLECTION` 集合检索（与长期记忆用的 `MILVUS_COLLECTION` 是两个集合，互不干扰）。把本地文档灌进去：
 
 ```bash
 python app/mult_agents/rag/ingest.py <文件或目录>   # 目录会递归收集 *.txt/*.md/*.markdown
+python app/mult_agents/rag/ingest.py data/corpus --chunk-size 300   # 换分块粒度
 ```
 
 不灌数据时 `local_rag` 检索为空，Pipeline 会靠 Bocha 联网检索这一路继续跑通。
@@ -116,7 +117,80 @@ python app/mult_agents/rag/ingest.py <文件或目录>   # 目录会递归收集
 
 ---
 
-## 四、目录结构
+## 四、评测
+
+项目自带一套可复跑的评测，用来量化"检索链路修复到底有没有带来改进"，而不是靠感觉描述。
+
+### 组成
+
+| 文件 | 作用 |
+|------|------|
+| `data/eval/eval_set.jsonl` | 50 道题，分 5 类（机理 12 / 对比 10 / 综述 10 / 政策 10 / 参数 8），每题标注 ground truth 语料文档 |
+| `data/eval/verify_eval_set.py` | 出题阶段校验：ground truth 文件存在性 + 检索召回 Recall@1/3/5 + 证据多样性 |
+| `data/eval/run_eval.py` | 跑完整流水线并导出 JSONL：token 用量折算成本、降级节点数、审核拦截数、非法引用数 |
+| `data/eval/score_runs.py` | LLM-as-judge 打分：忠实度（claim 级）+ 相关性 |
+| `data/corpus/` | 73 篇能源领域语料，每篇首行带维基来源 URL |
+
+```bash
+python data/eval/verify_eval_set.py                                  # 校验题目与检索召回
+python data/eval/run_eval.py --ids q01,q11,q13 --output data/eval/runs/runs.jsonl
+python data/eval/score_runs.py --input data/eval/runs/runs.jsonl
+```
+
+`run_eval.py` 会识别三类需要人工留意的记录并响亮标记：`BYPASSED`（题目被路由到 `direct_answer`，零检索零引用，对评测无效）、`FALLBACK`（产出的是降级报告）、审核拦截（证据池混入未经过滤的原始语料）。
+
+### 为什么不用 Ragas
+
+项目 pin 的是 langchain 1.x 线（langchain 1.0.7 / langchain-core 1.0.5）。`ragas 0.4.3` 在 `ragas/llms/base.py` 里 import `langchain_community.chat_models.vertexai.ChatVertexAI`，而该类在 langchain-community 0.4.x 已被拆成独立的 `langchain-google-vertexai` 包 —— **能装上，一导入就崩**；装进独立 venv 也没用，ragas 自己会拉一套 langchain。因此改为自建 LLM-as-judge：每题 3 次调用（论断抽取 / 忠实度判定 / 相关性），约 ¥0.04/题。
+
+### 实测结果
+
+修复检索链路（此前 planner 生成的大纲检索词因中文分词失效**从未真正进入检索计划**，检索长期只靠硬编码模板词在跑）前后，取 7 题覆盖四类做对照：
+
+| 题 | 类别 | 忠实度 旧 → 新 | 相关性 旧 → 新 |
+|---|---|---|---|
+| q01 | 机理 | 0.083 → 0.125 | 0.95 → 0.98 |
+| q11 | 机理 | 0.083 → 0.167 | 0.95 → 0.85 |
+| q13 | 对比 | 0.000 → 0.292 | 0.85 → 0.95 |
+| q18 | 对比 | 0.417 → 0.750 | 0.95 → 0.95 |
+| q23 | 参数 | 0.625 → 0.542 | 0.95 → 0.95 |
+| q25 | 参数 | 0.583 → 0.792 | 0.95 → 0.95 |
+| q41 | 综述 | 0.000 → 0.250 | 0.95 → 1.00 |
+| **平均** | | **0.256 → 0.417** | 0.936 → 0.947 |
+
+6/7 题上升（唯一例外 q23 微降）。检索命中率 100%、引用合规率 1.000，两侧一致。单题成本从 ¥0.055 涨到 ¥0.13 —— 修复后每轮真的会发出 6 条补搜词（旧逻辑永远只发 1 条），**修 bug 让评测变贵而不是变便宜**。
+
+**两点诚实说明：**
+
+1. **忠实度绝对偏低，有相当部分来自指标与设计目标的冲突。** `write` 提示词明确要求"深度扩写、逻辑推演、至少 2000–3000 字"，而推演出来的内容按定义不在检索证据里，会被 judge 判为 unsupported —— **这个指标惩罚的正是系统被要求做的事**。要真正提高它得改 `write` 提示词（收紧扩写、要求逐句挂证据），那是另一个取舍。旧版拿到 0.000 的两题则是真缺陷：检索被模板词带偏（搜到「台湾再生能源… GitHub」这类无关内容），writer 手上没有相关证据，只能靠参数化知识写，引文挂上了（合规率仍是 1.0）但内容撑不住 —— **引用合规率高 ≠ 内容有据**。
+2. **样本量小，只能作方向性结论。** 方差大（0.0–0.792），可以说"方向一致、幅度可感（相对 +63%）"，不能说"已证明提升 X%"。
+
+### 分块粒度对照
+
+同一批语料按 3 种 `chunk_size` 各灌一个集合，**只在检索层比**（忠实度被扩写要求污染，分辨不出粒度差异）：
+
+| chunk_size | chunk 数 | Recall@1 | Recall@3 | Recall@5 |
+|---|---|---|---|---|
+| 300 | 1253 | 81.6% | 98.0% | 100.0% |
+| **500（默认）** | 688 | **87.8%** | 98.0% | 100.0% |
+| 800 | 411 | 75.5% | 95.9% | 98.0% |
+
+结论：**chunk_size 不是召回瓶颈。** 300 与 500 在 Recall@3/5 上完全相同，差别只体现在 rank-1（最相关的那片排不排第一），而下游 `scout` LLM 读的是 top-k 全量并筛选，这个差异被吃掉了；默认值 500 恰好是三档里最好的。800 最差 —— chunk 越大，单个分片语义越稀、专指性越弱。复跑方式：
+
+```bash
+MILVUS_RAG_COLLECTION=mult_agent_knowledge_c300 \
+  python app/mult_agents/rag/ingest.py data/corpus --chunk-size 300
+MILVUS_RAG_COLLECTION=mult_agent_knowledge_c300 python data/eval/verify_eval_set.py
+```
+
+### 两条使用约束
+
+- **题目必须含调研型措辞**（"请分析 / 对比 / 调研…"）。短事实问句会被 `detect_intent()` 判为简单问题走 `direct_answer`，全程零检索零引用，测的根本不是这条流水线。
+- **`q36`（核电存废）已从评测集排除**：DashScope **输出端**内容审核对该题系统性命中（单轮 9 次调用中 8 次被拦），拿不到未被污染的证据。审核拦的是模型生成的内容，输入不变则重跑结果不变，再试只是白烧钱。该条在 `eval_set.jsonl` 里保留 `excluded: true` 与原因，两个脚本会自动跳过。
+
+---
+
+## 五、目录结构
 
 ```
 app/
@@ -136,13 +210,18 @@ app/
 └── app_main.py           # API 服务入口
 
 front/agent_front/        # Vue 3 前端（SSE 流式渲染）
+
+data/
+├── corpus/               # 73 篇能源领域语料，每篇首行带维基来源 URL
+└── eval/                 # 评测集与脚本（见「四、评测」）
 ```
 
 ---
 
-## 五、已知限制
+## 六、已知限制
 
-- **无自动化测试**。项目定位是架构演示，代码质量重点在模式而非生产级健壮性。
+- **无单元测试**。`data/eval/` 覆盖的是端到端行为（见「四、评测」），不是代码级测试。项目定位是架构演示，代码质量重点在模式而非生产级健壮性。
 - **完整记忆功能依赖外部服务**。Postgres / Redis / Milvus 未接入时会逐级降级到 SQLite，功能可用但非预期路径。
-- **反思循环的收敛收益未经量化**。当前只能观察到"通常 1–2 轮即满足证据充分条件"，缺少对照实验数据。
+- **评测样本量小**。7 题对照只能支撑方向性结论，单题存在反向波动（如 q23 微降）。
+- **忠实度指标与扩写要求存在张力**。`write` 提示词要求深度扩写与逻辑推演，推演内容天然不在检索证据里，会被 judge 判为 unsupported —— 忠实度偏低有相当部分来自这个设计取舍，而非纯缺陷。
 - **SQLite 降级后端无并发保护**，仅适用于本地单进程使用。
