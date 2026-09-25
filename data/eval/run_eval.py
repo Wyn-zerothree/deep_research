@@ -1,7 +1,8 @@
-"""在评测集上跑完整流水线，把每题产出导出为 JSONL，供 Ragas 打分。
+"""在评测集上跑完整流水线，把每题产出导出为 JSONL，供自建 LLM-as-judge 打分。
 
-主环境只负责"跑"和"导出"，打分交给独立 venv 里的 Ragas（见 score_with_ragas.py），
-这样 ragas 的 langchain-core 版本约束不会污染项目依赖。
+打分由 data/eval/score_runs.py 完成（自建 LLM-as-judge：论断抽取 / 忠实度 / 相关性）。
+Ragas 与项目 pin 的 langchain 1.x 冲突（0.4.3 引用的 ChatVertexAI 在 langchain-community
+0.4.x 已拆包，一导入就崩），无法使用，详见根 README「四、评测」。
 
 用法（仓库根目录下执行）：
     python data/eval/run_eval.py --limit 10

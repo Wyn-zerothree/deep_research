@@ -47,7 +47,7 @@ flowchart TB
 
 所有调用 LLM 的节点都配有对应的 Python 降级函数（`_fallback_analysis`、`_fallback_audit` 等）。即使模型返回格式错误的 JSON，Pipeline 仍能产出完整报告，而不是抛异常中断。
 
-### 4. 40+ 字段的共享状态
+### 4. 39 字段的共享状态
 
 `ResearchState` 在阶段之间显式传递所有中间产物（`plan`、`web_evidence`、`audit`、`evidence_pool`、`analysis`、`draft`…）。
 
@@ -125,7 +125,7 @@ python app/mult_agents/rag/ingest.py data/corpus --chunk-size 300   # 换分块�
 
 | 文件 | 作用 |
 |------|------|
-| `data/eval/eval_set.jsonl` | 50 道题，分 5 类（机理 12 / 对比 10 / 综述 10 / 政策 10 / 参数 8），每题标注 ground truth 语料文档 |
+| `data/eval/eval_set.jsonl` | 50 道题（q36 因内容审核拦截排除，49 道有效），分 5 类（机理 12 / 对比 10 / 综述 10 / 政策 10 / 参数 8），每题标注 ground truth 语料文档 |
 | `data/eval/verify_eval_set.py` | 出题阶段校验：ground truth 文件存在性 + 检索召回 Recall@1/3/5 + 证据多样性 |
 | `data/eval/run_eval.py` | 跑完整流水线并导出 JSONL：token 用量折算成本、降级节点数、审核拦截数、非法引用数 |
 | `data/eval/score_runs.py` | LLM-as-judge 打分：忠实度（claim 级）+ 相关性 |
@@ -198,7 +198,7 @@ app/
 ├── mult_agents/          # LangGraph 核心
 │   ├── graph.py          # StateGraph 构建：节点、条件边、反思循环
 │   ├── nodes.py          # 9 个节点函数
-│   ├── state.py          # ResearchState（40+ 字段）
+│   ├── state.py          # ResearchState（39 字段）
 │   ├── prompts.py        # 8 个系统提示词，与 8 个 Agent 一一对应
 │   ├── tools.py          # Bocha 检索、Milvus RAG 封装
 │   ├── config.py         # AppConfig 不可变 dataclass
