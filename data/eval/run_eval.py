@@ -14,6 +14,7 @@
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime
@@ -218,6 +219,19 @@ def main() -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
+    # 网络检索是否真的可用，必须自己判断并写进结果。
+    # 起因：早期跑批用 `BOCHA_API_KEY= python run_eval.py` 主动关掉联网来省调用费，
+    # 但 load_dotenv 不覆盖已存在的环境变量（空串也算存在），于是空值生效、
+    # tools.py 每次都 `return []`。产物里没有任何字段记录这件事，而
+    # web_query_count 数的是「发起次数」不是「成功次数」，看着一直很正常——
+    # 结果就是一批「单路检索」的记录被当成「双路检索」的结果用了。
+    web_enabled = bool(os.getenv("BOCHA_API_KEY", "").strip())
+    if not web_enabled:
+        print(
+            "    [警告] BOCHA_API_KEY 为空，本次跑批的网络检索将全部跳过（tools.py 直接返回空列表）。\n"
+            "           这批结果只覆盖本地 RAG 一路，web_query_count 不代表网络路有产出。"
+        )
+
     items = load_eval_set()
     # 标了 excluded 的题已知跑不出可用样本（当前只有被审核系统性命中的政策题），
     # 排除原因写在各自条目的 excluded_reason 里，别把它从测试集里悄悄删掉。
@@ -327,6 +341,7 @@ def main() -> int:
                 "iterations": result.get("iteration"),
                 "intent": result.get("intent"),
                 "citation_count": len(cited),
+                "web_search_enabled": web_enabled,
                 "web_query_count": web_queries,
                 "local_query_count": local_queries,
                 "llm_calls": tokens.calls,
